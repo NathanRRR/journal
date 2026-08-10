@@ -37,10 +37,10 @@ cp .env.example .env
 JOURNAL_ADMIN_PASSWORD=change-me-now
 ```
 
-5. Configurer MariaDB dans `.env` (le service `db` de `docker compose` est expose sur `127.0.0.1:3306`)
+5. Configurer MariaDB dans `.env` (le service `db` de `docker compose` est expose sur `127.0.0.1:3307` par defaut — port choisi pour ne pas entrer en conflit avec une MariaDB native eventuellement deja presente sur `3306`, voir `DB_HOST_PORT` dans le `.env.example` racine)
 
 ```env
-DATABASE_URL=mysql://journal:change-me@localhost:3306/journal
+DATABASE_URL=mysql://journal:change-me@localhost:3307/journal
 ```
 
 6. Appliquer la migration
