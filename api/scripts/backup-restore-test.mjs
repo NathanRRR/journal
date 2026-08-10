@@ -1,8 +1,10 @@
 import { config as loadDotenv } from 'dotenv';
-import { cp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { cp, mkdir, readdir, rm, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
+import { parseDatabaseUrl } from './lib/mariadb.mjs';
 
 loadDotenv();
 
@@ -10,26 +12,6 @@ const currentFile = fileURLToPath(import.meta.url);
 const rootDir = path.resolve(path.dirname(currentFile), '..');
 const backupsRoot = path.resolve(rootDir, 'storage', 'backups');
 const restoreSandboxRoot = path.resolve(rootDir, 'storage', 'restore-test');
-
-function sqlitePath() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl || !databaseUrl.startsWith('file:')) {
-    throw new Error('DATABASE_URL must be a SQLite file URL (file:...)');
-  }
-
-  const sqliteRelativePath = databaseUrl.slice('file:'.length);
-  const primaryPath = path.resolve(rootDir, sqliteRelativePath);
-  if (existsSync(primaryPath)) {
-    return primaryPath;
-  }
-
-  const fallbackPath = path.resolve(rootDir, 'prisma', sqliteRelativePath.replace(/^\.\//, ''));
-  if (existsSync(fallbackPath)) {
-    return fallbackPath;
-  }
-
-  return primaryPath;
-}
 
 async function latestBackupDir() {
   const entries = await readdir(backupsRoot, { withFileTypes: true });
@@ -43,35 +25,76 @@ async function latestBackupDir() {
   return path.join(backupsRoot, directories[0]);
 }
 
-async function validateSqliteHeader(dbPath) {
-  const content = await readFile(dbPath);
-  const header = content.subarray(0, 16).toString('utf8');
-  if (header !== 'SQLite format 3\u0000') {
-    throw new Error(`Invalid SQLite backup header for ${dbPath}`);
-  }
+function runMysqlCommand(admin, extraArgs) {
+  return new Promise((resolve, reject) => {
+    execFile(
+      'mysql',
+      [`--host=${admin.host}`, `--port=${admin.port}`, '--user=root', `--password=${admin.rootPassword}`, ...extraArgs],
+      { maxBuffer: 1024 * 1024 * 1024 },
+      (error, stdout) => (error ? reject(error) : resolve(stdout)),
+    );
+  });
+}
+
+function importDump(admin, database, dumpPath) {
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      'mysql',
+      [`--host=${admin.host}`, `--port=${admin.port}`, '--user=root', `--password=${admin.rootPassword}`, database],
+      { maxBuffer: 1024 * 1024 * 1024 },
+      (error) => (error ? reject(error) : resolve()),
+    );
+    createReadStream(dumpPath).pipe(child.stdin);
+  });
 }
 
 async function main() {
+  const connection = parseDatabaseUrl(process.env.DATABASE_URL);
+  const rootPassword = process.env.MARIADB_ROOT_PASSWORD;
+  if (!rootPassword) {
+    throw new Error('MARIADB_ROOT_PASSWORD is required to run a restore test');
+  }
+  const admin = { host: connection.host, port: connection.port, rootPassword };
+
   const sourceBackup = await latestBackupDir();
   const sandboxDir = path.join(restoreSandboxRoot, path.basename(sourceBackup));
+  const scratchDatabase = `${connection.database}_restore_test`;
 
   await rm(sandboxDir, { recursive: true, force: true });
   await mkdir(sandboxDir, { recursive: true });
-
-  await cp(path.join(sourceBackup, 'dev.db'), path.join(sandboxDir, 'dev.db'));
+  await cp(path.join(sourceBackup, 'db.sql'), path.join(sandboxDir, 'db.sql'));
   await cp(path.join(sourceBackup, 'media'), path.join(sandboxDir, 'media'), { recursive: true, force: true });
 
-  await validateSqliteHeader(path.join(sandboxDir, 'dev.db'));
+  await runMysqlCommand(admin, [
+    '--execute',
+    `DROP DATABASE IF EXISTS \`${scratchDatabase}\`; CREATE DATABASE \`${scratchDatabase}\`;`,
+  ]);
 
-  const mediaStats = await stat(path.join(sandboxDir, 'media'));
-  if (!mediaStats.isDirectory()) {
-    throw new Error('Restored media is not a directory');
+  try {
+    await importDump(admin, scratchDatabase, path.join(sandboxDir, 'db.sql'));
+
+    const countOutput = await runMysqlCommand(admin, [
+      '--batch',
+      '--skip-column-names',
+      scratchDatabase,
+      '--execute',
+      'SELECT COUNT(*) FROM JournalEntry;',
+    ]);
+    const entryCount = Number.parseInt(countOutput.toString().trim(), 10);
+    if (Number.isNaN(entryCount)) {
+      throw new Error('Restore verification query did not return a numeric count');
+    }
+
+    const mediaStats = await stat(path.join(sandboxDir, 'media'));
+    if (!mediaStats.isDirectory()) {
+      throw new Error('Restored media is not a directory');
+    }
+
+    console.log(`[restore-test] OK from ${sourceBackup} (${entryCount} entries restored, media OK)`);
+    console.log(`[restore-test] sandbox path: ${sandboxDir}`);
+  } finally {
+    await runMysqlCommand(admin, ['--execute', `DROP DATABASE IF EXISTS \`${scratchDatabase}\`;`]);
   }
-
-  const liveDb = sqlitePath();
-  console.log(`[restore-test] OK from ${sourceBackup}`);
-  console.log(`[restore-test] live database path: ${liveDb}`);
-  console.log(`[restore-test] sandbox path: ${sandboxDir}`);
 }
 
 main().catch((error) => {

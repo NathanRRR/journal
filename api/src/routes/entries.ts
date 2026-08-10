@@ -8,16 +8,11 @@ function handleRepositoryError(error: unknown, response: Response) {
   const code = (error as { code?: string } | undefined)?.code;
   const message = (error as { message?: string } | undefined)?.message ?? '';
 
-  if (
-    code === 'P1001' ||
-    message.includes('P1001') ||
-    message.includes("Can't reach database server") ||
-    message.includes('Error opening a SQLite database')
-  ) {
+  if (code === 'P1001' || message.includes('P1001') || message.includes("Can't reach database server")) {
     sendApiError(response, 503, {
       error: 'DATABASE_UNAVAILABLE',
       message: 'Base de donnees indisponible.',
-      hint: 'Verifier le fichier SQLite et les droits d acces.',
+      hint: 'Verifier la connexion MariaDB et les identifiants.',
     });
     return;
   }

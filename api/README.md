@@ -12,47 +12,58 @@ La variable `API_BASE_PATH` est donc definie par defaut a `/journal-api`.
 
 ## Quick start
 
-1. Installer les dependances
+1. Demarrer une MariaDB locale (depuis la racine du repo, pas dans `api/`)
+
+```bash
+cp .env.example .env
+docker compose up -d db
+```
+
+2. Installer les dependances de l API
 
 ```bash
 npm install
 ```
 
-2. Initialiser l environnement
+3. Initialiser l environnement de l API
 
 ```bash
 cp .env.example .env
 ```
 
-3. Definir un vrai mot de passe admin dans `.env`
+4. Definir un vrai mot de passe admin dans `.env`
 
 ```env
 JOURNAL_ADMIN_PASSWORD=change-me-now
 ```
 
-4. Configurer SQLite dans `.env`
+5. Configurer MariaDB dans `.env` (le service `db` de `docker compose` est expose sur `127.0.0.1:3306`)
 
 ```env
-DATABASE_URL=file:./prisma/dev.db
+DATABASE_URL=mysql://journal:change-me@localhost:3306/journal
 ```
 
-5. Appliquer la migration
+6. Appliquer la migration
 
 ```bash
 npx prisma migrate deploy
 ```
 
-6. Lancer en dev
+7. Lancer en dev
 
 ```bash
 npm run dev
 ```
 
-7. Injecter des donnees de test (optionnel)
+8. Injecter des donnees de test (optionnel)
 
 ```bash
 npm run seed-test
 ```
+
+## Tests
+
+`npm run test:api` necessite une MariaDB accessible via `DATABASE_URL` (le service `db` de `docker compose` suffit). Les tests appliquent les migrations et vident la table `JournalEntry` au demarrage — ne pas lancer les tests contre une base contenant de vraies donnees.
 
 ## Endpoints minimaux
 
@@ -88,28 +99,9 @@ Contraintes upload:
 
 ## Note importante
 
-- Les entrees sont stockees en SQLite via Prisma.
+- Les entrees sont stockees en MariaDB via Prisma.
 - Les medias uploades sont stockes sur disque dans `api/storage/media`.
 
-## Deploiement Prisma sur VPS
+## Deploiement
 
-Depuis le dossier `journal/api` sur le serveur:
-
-```bash
-npm ci
-npm run prisma:generate
-npm run prisma:migrate
-npm run seed-test
-npm run build
-npm run start
-```
-
-Sequence recommandee en mise a jour:
-
-```bash
-git pull --ff-only
-npm ci
-npm run prisma:generate
-npm run prisma:migrate
-npm run build
-```
+Le deploiement se fait via Docker (voir `deploy.md` a la racine du repo) : `docker compose build api` construit l image (qui applique `prisma migrate deploy` a chaque demarrage du conteneur), `docker compose up -d api` la lance. Le script `deploy.sh` a la racine enchaine ces etapes ainsi que le build du frontend.

@@ -1,8 +1,10 @@
 import { config as loadDotenv } from 'dotenv';
-import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { cp, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
+import { parseDatabaseUrl } from './lib/mariadb.mjs';
 
 loadDotenv();
 
@@ -11,37 +13,9 @@ const rootDir = path.resolve(path.dirname(currentFile), '..');
 const backupsRoot = path.resolve(rootDir, 'storage', 'backups');
 const keepDays = Number.parseInt(process.env.BACKUP_KEEP_DAYS ?? '14', 10);
 
-function getSqlitePathFromEnv() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl || !databaseUrl.startsWith('file:')) {
-    throw new Error('DATABASE_URL must be a SQLite file URL (file:...)');
-  }
-
-  const sqliteRelativePath = databaseUrl.slice('file:'.length);
-  const primaryPath = path.resolve(rootDir, sqliteRelativePath);
-  if (existsSync(primaryPath)) {
-    return primaryPath;
-  }
-
-  const fallbackPath = path.resolve(rootDir, 'prisma', sqliteRelativePath.replace(/^\.\//, ''));
-  if (existsSync(fallbackPath)) {
-    return fallbackPath;
-  }
-
-  return primaryPath;
-}
-
 function nowStamp(date = new Date()) {
   const pad = (value) => String(value).padStart(2, '0');
   return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}-${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`;
-}
-
-async function ensureSqliteFileLooksValid(dbPath) {
-  const headerBuffer = await readFile(dbPath);
-  const header = headerBuffer.subarray(0, 16).toString('utf8');
-  if (header !== 'SQLite format 3\u0000') {
-    throw new Error(`Database file at ${dbPath} is not a valid SQLite file`);
-  }
 }
 
 async function rotateOldBackups() {
@@ -61,16 +35,39 @@ async function rotateOldBackups() {
   }
 }
 
+function dumpDatabase(connection, destination) {
+  return new Promise((resolve, reject) => {
+    const dump = execFile(
+      'mysqldump',
+      [
+        `--host=${connection.host}`,
+        `--port=${connection.port}`,
+        `--user=${connection.user}`,
+        `--password=${connection.password}`,
+        '--single-transaction',
+        '--routines',
+        connection.database,
+      ],
+      { maxBuffer: 1024 * 1024 * 1024 },
+    );
+
+    const output = createWriteStream(destination);
+    dump.stdout.pipe(output);
+    dump.stderr.on('data', (chunk) => process.stderr.write(chunk));
+    dump.on('error', reject);
+    dump.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`mysqldump exited with code ${code}`))));
+  });
+}
+
 async function main() {
-  const dbPath = getSqlitePathFromEnv();
+  const connection = parseDatabaseUrl(process.env.DATABASE_URL);
   const mediaDir = path.resolve(rootDir, 'storage', 'media');
-  await ensureSqliteFileLooksValid(dbPath);
 
   const stamp = nowStamp();
   const destination = path.join(backupsRoot, stamp);
   await mkdir(destination, { recursive: true });
 
-  await cp(dbPath, path.join(destination, 'dev.db'));
+  await dumpDatabase(connection, path.join(destination, 'db.sql'));
   await cp(mediaDir, path.join(destination, 'media'), { recursive: true, force: true });
 
   await writeFile(
@@ -80,7 +77,8 @@ async function main() {
         createdAt: new Date().toISOString(),
         keepDays,
         source: {
-          databasePath: dbPath,
+          database: connection.database,
+          host: connection.host,
           mediaPath: mediaDir,
         },
       },
