@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  font-family: 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+  color: #f7f2ff;
+  background:
+    radial-gradient(120% 120% at 10% 8%, #33204d 0%, transparent 42%),
+    radial-gradient(90% 100% at 88% 84%, #241435 0%, transparent 46%),
+    linear-gradient(160deg, #120819 0%, #1a0e27 45%, #140a20 100%);
+  background-attachment: fixed;
+}
+
+.app-shell {
+  background:
+    radial-gradient(120% 120% at 12% 10%, rgba(92, 53, 140, 0.24), transparent 42%),
+    radial-gradient(95% 110% at 86% 88%, rgba(73, 35, 112, 0.26), transparent 46%),
+    linear-gradient(160deg, #120819 0%, #1a0e27 45%, #140a20 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input {
+  font: inherit;
+}

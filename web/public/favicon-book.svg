@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Livre">
+  <rect width="64" height="64" rx="12" fill="#111827" />
+  <path d="M14 16h18c6 0 10 2 12 5V52c-2-3-6-5-12-5H14z" fill="#f8f1e7" />
+  <path d="M50 16H32c-6 0-10 2-12 5V52c2-3 6-5 12-5h18z" fill="#e7dccd" />
+  <path d="M32 16v31" stroke="#1f2937" stroke-width="2" />
+  <path d="M20 25h9M20 30h9M20 35h9" stroke="#1f2937" stroke-width="2" stroke-linecap="round" />
+  <path d="M35 25h9M35 30h9M35 35h9" stroke="#374151" stroke-width="2" stroke-linecap="round" />
+</svg>
