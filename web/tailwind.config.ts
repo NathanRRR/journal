@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 export default {
+  darkMode: ['selector', '[data-theme="dark"]'],
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
@@ -10,9 +11,9 @@ export default {
           900: '#1d0f2a',
           800: '#2b1840',
         },
-        paper: '#f7f2ff',
-        accent: '#c084fc',
-        accentSoft: '#ddd6fe',
+        paper: 'rgb(var(--color-paper) / <alpha-value>)',
+        accent: 'rgb(var(--color-accent) / <alpha-value>)',
+        accentSoft: 'rgb(var(--color-accent-soft) / <alpha-value>)',
       },
       boxShadow: {
         manuscript: '0 24px 80px rgba(20, 8, 34, 0.45)',

@@ -19,6 +19,46 @@ type SuccessNotice = {
   text: string;
 };
 
+type Theme = 'light' | 'dark';
+
+const THEME_STORAGE_KEY = 'journal-theme';
+
+function getInitialTheme(): Theme {
+  const current = document.documentElement.dataset.theme;
+  return current === 'light' ? 'light' : 'dark';
+}
+
+function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={theme === 'dark' ? 'Basculer en mode clair' : 'Basculer en mode sombre'}
+      className="fixed right-4 top-4 z-50 flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[var(--field-border)] bg-[var(--panel-bg)] text-lg leading-none backdrop-blur transition-colors hover:bg-[var(--hover-bg)]"
+    >
+      <span key={theme} className="theme-toggle-icon">
+        {theme === 'dark' ? '☀️' : '🌙'}
+      </span>
+    </button>
+  );
+}
+
+function TagList({ tags }: { tags: string[] }) {
+  if (tags.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {tags.map((tag, index) => (
+        <span key={`${index}-${tag}`} className="rounded-full bg-accent/15 px-2.5 py-0.5 text-[11px] font-medium text-accent">
+          {tag}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 const PAGE_SIZE = 30;
 const IMAGE_MAX_SIZE_BYTES = 8 * 1024 * 1024;
 const AUDIO_MAX_SIZE_BYTES = 20 * 1024 * 1024;
@@ -74,6 +114,7 @@ export default function App() {
     }
   }, [apiBaseUrl]);
 
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [view, setView] = useState<View>('auth');
   const [authChecking, setAuthChecking] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
@@ -371,6 +412,41 @@ export default function App() {
       setDetailLoading(false);
     }
   }
+
+  function toggleTheme() {
+    setTheme((previous) => {
+      const next: Theme = previous === 'dark' ? 'light' : 'dark';
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, next);
+      } catch {
+        // localStorage indisponible (navigation privee) : le choix ne sera pas memorise.
+      }
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: light)');
+
+    function handleSystemChange(event: MediaQueryListEvent) {
+      let stored: string | null = null;
+      try {
+        stored = localStorage.getItem(THEME_STORAGE_KEY);
+      } catch {
+        stored = null;
+      }
+      if (!stored) {
+        setTheme(event.matches ? 'light' : 'dark');
+      }
+    }
+
+    media.addEventListener('change', handleSystemChange);
+    return () => media.removeEventListener('change', handleSystemChange);
+  }, []);
 
   useEffect(() => {
     setAuthChecking(true);
@@ -734,9 +810,10 @@ export default function App() {
   if (authChecking) {
     return (
       <main className="app-shell min-h-screen text-paper">
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
         <div className="mx-auto max-w-xl px-4 py-16 sm:px-6 sm:py-24">
           <p className="text-sm uppercase tracking-[0.2em] text-paper/70">Verification session</p>
-          <h1 className="mt-4 font-serif text-3xl text-white sm:text-4xl">Journal intime</h1>
+          <h1 className="mt-4 font-serif text-3xl text-paper sm:text-4xl">Journal intime</h1>
           <p className="mt-4 text-paper/80">Chargement...</p>
         </div>
       </main>
@@ -746,12 +823,13 @@ export default function App() {
   if (view === 'auth') {
     return (
       <main className="app-shell min-h-screen text-paper">
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
         <div className="mx-auto max-w-xl px-4 py-16 sm:px-6 sm:py-24">
           <p className="text-sm uppercase tracking-[0.2em] text-paper/70">journal.rivierenathan.fr</p>
-          <h1 className="mt-4 font-serif text-3xl text-white sm:text-4xl">Authentification</h1>
+          <h1 className="mt-4 font-serif text-3xl text-paper sm:text-4xl">Authentification</h1>
           <p className="mt-3 text-paper/80">Entree reservee admin. Session 7 jours glissants.</p>
 
-          <form className="mt-8 space-y-4 rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6" onSubmit={handleLogin}>
+          <form className="mt-8 space-y-4 rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-4 sm:p-6" onSubmit={handleLogin}>
             <label htmlFor="password" className="block text-sm text-paper/80">
               Mot de passe
             </label>
@@ -760,13 +838,13 @@ export default function App() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-xl border border-white/20 bg-black/30 px-4 py-3 text-white"
+              className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg-strong)] px-4 py-3 text-paper"
               placeholder="Saisir le mot de passe"
             />
             <button
               type="submit"
               disabled={authLoading}
-              className="w-full rounded-xl bg-accent px-5 py-3 font-medium text-white disabled:opacity-70 sm:w-auto"
+              className="w-full rounded-xl bg-accent px-5 py-3 font-medium text-white transition hover:brightness-110 active:brightness-95 disabled:opacity-70 sm:w-auto"
             >
               {authLoading ? 'Connexion...' : 'Se connecter'}
             </button>
@@ -780,11 +858,12 @@ export default function App() {
 
   return (
     <main className="app-shell min-h-screen text-paper">
+      <ThemeToggle theme={theme} onToggle={toggleTheme} />
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
         <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-paper/60">journal.rivierenathan.fr</p>
-            <h1 className="mt-2 font-serif text-3xl text-white sm:text-4xl">Journal intime</h1>
+            <h1 className="mt-2 font-serif text-3xl text-paper sm:text-4xl">Journal intime</h1>
           </div>
           <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
             <button
@@ -793,14 +872,14 @@ export default function App() {
                 setSelectedEntryId(null);
                 setSelectedEntry(null);
               }}
-              className="rounded-xl border border-white/20 px-4 py-2 text-sm"
+              className="rounded-xl border border-[var(--field-border)] px-4 py-2 text-sm transition-colors hover:bg-[var(--hover-bg)]"
             >
               Liste
             </button>
-            <button onClick={() => setView('add')} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white">
+            <button onClick={() => setView('add')} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 active:brightness-95">
               Ajouter entree
             </button>
-            <button onClick={handleLogoutClick} className="rounded-xl border border-white/20 px-4 py-2 text-sm">
+            <button onClick={handleLogoutClick} className="rounded-xl border border-[var(--field-border)] px-4 py-2 text-sm transition-colors hover:bg-[var(--hover-bg)]">
               Deconnexion
             </button>
           </div>
@@ -813,23 +892,23 @@ export default function App() {
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 placeholder="Rechercher par titre ou tag"
-                className="w-full flex-1 rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                className="w-full flex-1 rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
               />
               <input
                 type="date"
                 value={filterFromInput}
                 onChange={(event) => setFilterFromInput(event.target.value)}
-                className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3 sm:w-auto"
+                className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3 sm:w-auto"
                 aria-label="Date de debut"
               />
               <input
                 type="date"
                 value={filterToInput}
                 onChange={(event) => setFilterToInput(event.target.value)}
-                className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3 sm:w-auto"
+                className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3 sm:w-auto"
                 aria-label="Date de fin"
               />
-              <button type="submit" className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-medium text-white sm:w-auto">
+              <button type="submit" className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-medium text-white transition hover:brightness-110 active:brightness-95 sm:w-auto">
                 Rechercher
               </button>
               <button
@@ -843,7 +922,7 @@ export default function App() {
                   setFilterTo(undefined);
                   void loadEntries({ reset: true, query: '', from: undefined, to: undefined });
                 }}
-                className="w-full rounded-xl border border-white/20 px-4 py-3 text-sm sm:w-auto"
+                className="w-full rounded-xl border border-[var(--field-border)] px-4 py-3 text-sm transition-colors hover:bg-[var(--hover-bg)] sm:w-auto"
               >
                 Reinitialiser
               </button>
@@ -855,38 +934,48 @@ export default function App() {
                 const audioSrc = resolveMediaUrl(entry.audioUrl);
 
                 return (
-                  <article key={entry.id} className="w-full rounded-2xl border border-white/10 bg-white/5 p-3 text-left sm:p-4">
+                  <article
+                    key={entry.id}
+                    className="w-full rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:[box-shadow:var(--card-hover-shadow)] sm:p-4"
+                  >
                     <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <div>
-                        <h3 className="font-semibold text-white">{entry.title}</h3>
+                        <h3 className="font-serif text-lg font-semibold text-paper">{entry.title}</h3>
                         <span className="text-xs text-paper/70">{formatDateOnly(entry.date)}</span>
                       </div>
                       <button
                         onClick={() => void openDetail(entry.id)}
-                        className="rounded-lg border border-white/25 px-3 py-1.5 text-xs font-medium text-paper hover:bg-white/10"
+                        className="rounded-lg border border-[var(--chip-border)] px-3 py-1.5 text-xs font-medium text-paper transition-colors hover:bg-[var(--hover-bg)]"
                       >
                         Ouvrir
                       </button>
                     </div>
 
-                    {entry.tags.length > 0 ? <p className="mt-2 text-xs text-paper/60">{entry.tags.join(', ')}</p> : null}
+                    <TagList tags={entry.tags} />
                     {entry.text ? <p className="mt-2 text-sm text-paper/85">{excerpt(entry.text)}</p> : null}
 
                     {imageSrc ? (
                       <img
                         src={imageSrc}
                         alt={`Illustration de l entree ${entry.title}`}
-                        className="mt-3 h-40 w-full rounded-lg object-cover"
+                        className="mt-3 h-40 w-full rounded-lg border border-[var(--panel-border)] object-cover [box-shadow:var(--media-shadow)]"
                         loading="lazy"
                       />
                     ) : null}
 
-                    {audioSrc ? <audio className="mt-3 w-full" controls preload="none" src={audioSrc} /> : null}
+                    {audioSrc ? (
+                      <audio
+                        className="mt-3 w-full rounded-lg border border-[var(--panel-border)] bg-[var(--field-bg)] p-1 [box-shadow:var(--media-shadow)]"
+                        controls
+                        preload="none"
+                        src={audioSrc}
+                      />
+                    ) : null}
                   </article>
                 );
               })}
               {entries.length === 0 && !isLoadingEntries ? (
-                <p className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-paper/70">Aucune entree.</p>
+                <p className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-4 text-sm text-paper/70">Aucune entree.</p>
               ) : null}
               <div ref={sentinelRef} className="h-6" />
               {isLoadingEntries ? <p className="text-sm text-paper/70">Chargement...</p> : null}
@@ -896,57 +985,57 @@ export default function App() {
         ) : null}
 
         {view === 'add' ? (
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
-            <h2 className="text-xl font-semibold text-white">Nouvelle entree</h2>
+          <section className="rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-4 sm:p-6">
+            <h2 className="font-serif text-xl font-semibold text-paper">Nouvelle entree</h2>
             <form className="mt-5 space-y-3" onSubmit={handleAddEntry}>
               <input
                 value={addTitle}
                 onChange={(event) => setAddTitle(event.target.value)}
                 placeholder="Titre"
-                className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
               />
               <input
                 type="datetime-local"
                 value={addDate}
                 onChange={(event) => setAddDate(event.target.value)}
-                className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
               />
               <input
                 value={addTags}
                 onChange={(event) => setAddTags(event.target.value)}
                 placeholder="Tags separes par virgule"
-                className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
               />
               <textarea
                 value={addText}
                 onChange={(event) => setAddText(event.target.value)}
                 placeholder="Texte"
                 rows={6}
-                className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
               />
               <input
                 type="file"
                 accept="audio/*"
                 onChange={(event) => handleAddAudioSelection(event.target.files?.[0] ?? null)}
-                className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
               />
               {addAudioFile ? <p className="text-xs text-paper/70">Audio selectionne: {addAudioFile.name}</p> : null}
-              {addAudioPreviewUrl ? <audio className="w-full" controls preload="metadata" src={addAudioPreviewUrl} /> : null}
+              {addAudioPreviewUrl ? <audio className="w-full rounded-lg border border-[var(--panel-border)] bg-[var(--field-bg)] p-1 [box-shadow:var(--media-shadow)]" controls preload="metadata" src={addAudioPreviewUrl} /> : null}
               <input
                 type="file"
                 accept="image/*"
                 onChange={(event) => handleAddImageSelection(event.target.files?.[0] ?? null)}
-                className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
               />
               {addImageFile ? <p className="text-xs text-paper/70">Image selectionnee: {addImageFile.name}</p> : null}
               {addImagePreviewUrl ? (
                 <img
                   src={addImagePreviewUrl}
                   alt="Apercu image a ajouter"
-                  className="h-auto max-h-72 w-full rounded-xl object-contain"
+                  className="h-auto max-h-72 w-full rounded-xl border border-[var(--panel-border)] object-contain [box-shadow:var(--media-shadow)]"
                 />
               ) : null}
-              <button type="submit" disabled={addLoading} className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-medium text-white sm:w-auto">
+              <button type="submit" disabled={addLoading} className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-medium text-white transition hover:brightness-110 active:brightness-95 sm:w-auto">
                 {addLoading ? 'Creation...' : 'Creer'}
               </button>
             </form>
@@ -954,36 +1043,36 @@ export default function App() {
         ) : null}
 
         {view === 'detail' ? (
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-4 sm:p-6">
+          <section className="rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-bg)] p-4 sm:p-6">
             {detailLoading ? <p>Chargement detail...</p> : null}
 
             {!detailLoading && selectedEntry ? (
               <>
                 {!editMode ? (
                   <div className="space-y-3">
-                    <h2 className="text-2xl font-semibold text-white">{selectedEntry.title}</h2>
+                    <h2 className="font-serif text-2xl font-semibold text-paper">{selectedEntry.title}</h2>
                     <p className="text-sm text-paper/70">{new Date(selectedEntry.date).toLocaleString('fr-FR')}</p>
-                    {selectedEntry.tags.length > 0 ? <p className="text-sm text-paper/70">{selectedEntry.tags.join(', ')}</p> : null}
+                    <TagList tags={selectedEntry.tags} />
                     {selectedEntry.text ? <p className="whitespace-pre-wrap text-paper/90">{selectedEntry.text}</p> : null}
                     {selectedEntry.imageUrl ? (
                       <img
                         src={resolveMediaUrl(selectedEntry.imageUrl)}
                         alt={`Image de l entree ${selectedEntry.title}`}
-                        className="h-auto max-h-[420px] w-full rounded-xl object-contain"
+                        className="h-auto max-h-[420px] w-full rounded-xl border border-[var(--panel-border)] object-contain [box-shadow:var(--media-shadow)]"
                         loading="lazy"
                       />
                     ) : null}
                     {selectedEntry.audioUrl ? (
-                      <audio className="w-full" controls preload="metadata" src={resolveMediaUrl(selectedEntry.audioUrl)} />
+                      <audio className="w-full rounded-lg border border-[var(--panel-border)] bg-[var(--field-bg)] p-1 [box-shadow:var(--media-shadow)]" controls preload="metadata" src={resolveMediaUrl(selectedEntry.audioUrl)} />
                     ) : null}
                     <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
-                      <button onClick={() => setEditMode(true)} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white">
+                      <button onClick={() => setEditMode(true)} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 active:brightness-95">
                         Modifier
                       </button>
                       <button
                         onClick={() => void handleDeleteEntry()}
                         disabled={deleteLoading}
-                        className="rounded-xl border border-red-400/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 disabled:opacity-70"
+                        className="rounded-xl border border-[var(--danger-border)] bg-[var(--danger-bg)] px-4 py-2 text-sm font-medium text-[var(--danger-text)] disabled:opacity-70"
                       >
                         {deleteLoading ? 'Suppression...' : 'Supprimer'}
                       </button>
@@ -994,59 +1083,59 @@ export default function App() {
                     <input
                       value={editTitle}
                       onChange={(event) => setEditTitle(event.target.value)}
-                      className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                      className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
                     />
                     <input
                       type="datetime-local"
                       value={editDate}
                       onChange={(event) => setEditDate(event.target.value)}
-                      className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                      className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
                     />
                     <input
                       value={editTags}
                       onChange={(event) => setEditTags(event.target.value)}
-                      className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                      className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
                     />
                     <textarea
                       value={editText}
                       onChange={(event) => setEditText(event.target.value)}
                       rows={6}
-                      className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                      className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
                     />
                     <input
                       type="file"
                       accept="audio/*"
                       onChange={(event) => handleEditAudioSelection(event.target.files?.[0] ?? null)}
-                      className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                      className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
                     />
                     {editAudioFile ? <p className="text-xs text-paper/70">Nouvel audio: {editAudioFile.name}</p> : null}
-                    {editAudioPreviewUrl ? <audio className="w-full" controls preload="metadata" src={editAudioPreviewUrl} /> : null}
+                    {editAudioPreviewUrl ? <audio className="w-full rounded-lg border border-[var(--panel-border)] bg-[var(--field-bg)] p-1 [box-shadow:var(--media-shadow)]" controls preload="metadata" src={editAudioPreviewUrl} /> : null}
                     <input
                       type="file"
                       accept="image/*"
                       onChange={(event) => handleEditImageSelection(event.target.files?.[0] ?? null)}
-                      className="w-full rounded-xl border border-white/20 bg-black/20 px-4 py-3"
+                      className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-4 py-3"
                     />
                     {editImageFile ? <p className="text-xs text-paper/70">Nouvelle image: {editImageFile.name}</p> : null}
                     {editImagePreviewUrl ? (
                       <img
                         src={editImagePreviewUrl}
                         alt="Apercu nouvelle image"
-                        className="h-auto max-h-72 w-full rounded-xl object-contain"
+                        className="h-auto max-h-72 w-full rounded-xl border border-[var(--panel-border)] object-contain [box-shadow:var(--media-shadow)]"
                       />
                     ) : null}
                     <div className="grid grid-cols-1 gap-2 sm:flex">
                       <button
                         type="submit"
                         disabled={editLoading}
-                        className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white"
+                        className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 active:brightness-95"
                       >
                         {editLoading ? 'Sauvegarde...' : 'Sauvegarder'}
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditMode(false)}
-                        className="rounded-xl border border-white/20 px-4 py-2 text-sm"
+                        className="rounded-xl border border-[var(--field-border)] px-4 py-2 text-sm transition-colors hover:bg-[var(--hover-bg)]"
                       >
                         Annuler
                       </button>
@@ -1059,7 +1148,7 @@ export default function App() {
         ) : null}
 
         {successNotice ? (
-          <p className="mt-6 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{successNotice.text}</p>
+          <p className="mt-6 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)] px-4 py-3 text-sm text-[var(--success-text)]">{successNotice.text}</p>
         ) : null}
         {message ? <p className="mt-6 text-sm text-paper/80">{message}</p> : null}
       </div>
