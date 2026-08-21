@@ -5,7 +5,8 @@ cd "$(dirname "$0")"
 
 git pull --ff-only
 
-docker compose build db api
+docker compose pull db
+docker compose build --pull api
 docker compose up -d db api
 
 docker compose build web-build
