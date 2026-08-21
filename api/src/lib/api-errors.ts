@@ -5,6 +5,8 @@ type ApiErrorPayload = {
   message: string;
   details?: unknown;
   hint?: string;
+  retryAfterSeconds?: number;
+  remainingAttempts?: number;
 };
 
 export function sendApiError(
